@@ -11,11 +11,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from six.moves.urllib.request import Request, urlopen
-from six.moves.urllib.error import HTTPError
 from six.moves.urllib.parse import urlencode
 
 import json
+import requests
 
 from parse_rest import core
 
@@ -110,34 +109,29 @@ class ParseBase(object):
         else:
             data = data.encode('utf-8')
 
-        headers = {
-            'Content-type': 'application/json',
-            'X-Parse-Application-Id': app_id,
-            'X-Parse-REST-API-Key': rest_key
-        }
-        headers.update(extra_headers or {})
+        def _headers():
+            yield 'Content-type', 'application/json'
+            yield 'X-Parse-Application-Id', app_id
+            yield 'X-Parse-REST-API-Key', rest_key
+            for key, val in (extra_headers or {}).items():
+                yield key, val
+            if ACCESS_KEYS.get('session_token'):
+                yield 'X-Parse-Session-Token', ACCESS_KEYS.get('session_token')
+            elif master_key:
+                yield 'X-Parse-Master-Key', master_key
 
-        request = Request(url, data, headers)
-        
-        if ACCESS_KEYS.get('session_token'):
-            request.add_header('X-Parse-Session-Token', ACCESS_KEYS.get('session_token'))
-        elif master_key:
-            request.add_header('X-Parse-Master-Key', master_key)
-
-        request.get_method = lambda: http_verb
-
+        response = requests.request(http_verb, url, headers=dict(_headers()), data=data, timeout=CONNECTION_TIMEOUT)
         try:
-            response = urlopen(request, timeout=CONNECTION_TIMEOUT)
-        except HTTPError as e:
+            response.raise_for_status()
+        except Exception:
             exc = {
                 400: core.ResourceRequestBadRequest,
                 401: core.ResourceRequestLoginRequired,
                 403: core.ResourceRequestForbidden,
                 404: core.ResourceRequestNotFound
-                }.get(e.code, core.ParseError)
-            raise exc(e.read())
-
-        return json.loads(response.read().decode('utf-8'))
+            }.get(response.status_code, core.ParseError)
+            raise exc(response.content)
+        return response.json()
 
     @classmethod
     def GET(cls, uri, **kw):

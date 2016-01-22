@@ -27,7 +27,7 @@ setup(
     url='https://github.com/dgrtwo/ParsePy',
     packages=['parse_rest'],
     package_data={"parse_rest": [os.path.join("cloudcode", "*", "*")]},
-    install_requires=['six'],
+    install_requires=['six', 'requests>=2'],
     maintainer='David Robinson',
     maintainer_email='dgrtwo@princeton.edu',
     cmdclass={'test': TestCommand},
